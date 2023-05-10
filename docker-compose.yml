@@ -1,0 +1,65 @@
+version: '3.9'
+services:
+
+  postgres:
+    container_name: postgres
+    networks:
+      - app_net
+    restart: unless-stopped
+    image: postgres:15.2-alpine3.17
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: 'user'
+      POSTGRES_PASSWORD: 'pass'
+      POSTGRES_DB: 'postgres'
+    # healthcheck:
+    #   test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER || exit 1"]
+    #   interval: 5s
+    #   timeout: 5s
+    #   retries: 5
+    ports:
+      - 5432:5432
+  app:
+    build: .
+    container_name: app
+    networks:
+      - app_net
+    restart: unless-stopped
+    image: app
+    environment:
+      PG_URL: 'postgres://user:pass@postgres:5432/postgres'
+    ports:
+      - 8080:8080
+    depends_on:
+      - postgres
+      - migrate
+  migrate:
+    container_name: migrate
+    networks:
+      - app_net
+    image: migrate/migrate:v4.15.2
+    volumes:
+      - ./migrations:/migrations
+    links: 
+      - postgres
+    depends_on:
+      - postgres
+        # condition: service_healthy
+    command: ["-path", "/migrations", "-database",  "postgres://user:pass@postgres:5432/postgres?sslmode=disable", "up", "3"]
+
+  # integration:
+  #   build:
+  #     context: .
+  #     dockerfile: integration-test/Dockerfile
+  #   container_name: integration
+  #   image: integration
+  #   depends_on:
+  #     - app
+
+volumes:
+  pg-data:
+
+networks:
+  app_net:
+    name: app_net
